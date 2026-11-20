@@ -44,9 +44,15 @@ def login_and_save_session():
         # Save storage state (cookies, local storage, tokens)
         context.storage_state(path=str(config.SESSION_FILE))
         print(f"[SUCCESS] Session saved successfully to: {config.SESSION_FILE}")
-        print("Your automated daily updates can now run without requiring manual login!")
-
         browser.close()
+
+        # Automatically sync to GitHub Cloud for running when laptop is off
+        try:
+            from sync_to_github import sync_session_and_resume
+            sync_session_and_resume()
+        except Exception as e:
+            print(f"\n[Note] Cloud sync skipped: {e}")
+            print("Local session is saved and ready for local runs.")
 
 if __name__ == "__main__":
     try:
