@@ -178,25 +178,31 @@ def execute_single_attempt() -> bool:
         page = context.new_page()
 
         try:
-            logger.info(f"Navigating to Naukri profile: {config.NAUKRI_PROFILE_URL}")
-            page.goto(config.NAUKRI_PROFILE_URL, wait_until="domcontentloaded", timeout=config.BROWSER_TIMEOUT_MS)
-            page.wait_for_timeout(2000)
+            # 1. Warm up session and refresh tokens by visiting homepage first
+            logger.info("Visiting Naukri homepage to refresh authentication session...")
+            page.goto("https://www.naukri.com/mnjuser/homepage", wait_until="domcontentloaded", timeout=config.BROWSER_TIMEOUT_MS)
+            page.wait_for_timeout(3000)
 
-            # Check if redirected to login page or access denied
+            # Check if session is truly invalid (redirected to login or login button appears)
             if "login" in page.url.lower():
                 logger.error("Session has expired! Naukri redirected to the login page.")
                 logger.error("Please re-run 'python auth_login.py' to generate a fresh session.")
                 return False
 
+            # 2. Navigate to profile page
+            logger.info(f"Navigating to Naukri profile: {config.NAUKRI_PROFILE_URL}")
+            page.goto(config.NAUKRI_PROFILE_URL, wait_until="domcontentloaded", timeout=config.BROWSER_TIMEOUT_MS)
+            page.wait_for_timeout(2000)
+
             if "Access Denied" in page.title():
                 logger.error("Access Denied by bot detection.")
                 return False
 
-            # Wait for profile cards to render (wait for DOM attachment, then scroll into view)
+            # Wait for profile cards to render
             logger.info("Waiting for profile cards to render...")
             page.wait_for_selector("#resumeHeadline", state="attached", timeout=30000)
             page.wait_for_timeout(2000)
-            page.evaluate("window.scrollTo(0, 600)")
+            page.evaluate("window.scrollTo(0, 500)")
             page.wait_for_timeout(1500)
             logger.info("Profile page successfully loaded.")
 
