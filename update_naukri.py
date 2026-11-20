@@ -105,10 +105,15 @@ def update_resume_headline(page) -> bool:
     """Touches the Resume Headline by adding or removing a trailing period and saving."""
     logger.info("Attempting Resume Headline update...")
     try:
+        headline_card = page.locator("#resumeHeadline")
+        if headline_card.count() > 0:
+            headline_card.first.scroll_into_view_if_needed()
+            page.wait_for_timeout(1000)
+
         # Locate the Resume headline edit button
-        edit_btn = page.locator("#resumeHeadline [aria-label='Edit Resume headline'], #resumeHeadline [class*='edit-icon']")
+        edit_btn = page.locator("#resumeHeadline [aria-label*='Edit'], #resumeHeadline [class*='edit-icon'], #resumeHeadline [class*='edit']")
         if edit_btn.count() == 0:
-            edit_btn = page.locator("div.resumeHeadline .edit, [class*='resumeHeadline'] [class*='edit']")
+            edit_btn = page.locator("#resumeHeadline img[src*='edit']").locator("xpath=..")
 
         if edit_btn.count() == 0:
             logger.warning("Could not find edit button for Resume Headline.")
@@ -187,10 +192,12 @@ def execute_single_attempt() -> bool:
                 logger.error("Access Denied by bot detection.")
                 return False
 
-            # Wait for profile cards to render
+            # Wait for profile cards to render (wait for DOM attachment, then scroll into view)
             logger.info("Waiting for profile cards to render...")
-            page.wait_for_selector("#resumeHeadline", timeout=30000)
+            page.wait_for_selector("#resumeHeadline", state="attached", timeout=30000)
             page.wait_for_timeout(2000)
+            page.evaluate("window.scrollTo(0, 600)")
+            page.wait_for_timeout(1500)
             logger.info("Profile page successfully loaded.")
 
             # Action 1: Upload Resume
