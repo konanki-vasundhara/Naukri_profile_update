@@ -1,0 +1,24 @@
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Sensitive Naukri session & credentials
+session.json
+
+# Resumes (personal documents)
+resumes/*.pdf
+resumes/*.docx
+resumes/*.doc
+
+# Logs
+logs/*.log
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Debug files
+debug_*
