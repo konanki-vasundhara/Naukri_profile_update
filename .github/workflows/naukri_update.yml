@@ -1,0 +1,59 @@
+name: Naukri Daily Auto-Updater
+
+on:
+  schedule:
+    # 8:00 AM IST (Indian Standard Time is UTC + 5:30) -> 02:30 UTC
+    - cron: '30 2 * * *'
+    # 5:00 PM IST (17:00 IST) -> 11:30 UTC
+    - cron: '30 11 * * *'
+  # Allows you to manually trigger the workflow from GitHub Actions UI anytime
+  workflow_dispatch:
+
+jobs:
+  update-profile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Restore Session & Resume from Secrets
+        env:
+          NAUKRI_SESSION_B64: ${{ secrets.NAUKRI_SESSION_B64 }}
+          RESUME_B64: ${{ secrets.RESUME_B64 }}
+        run: |
+          mkdir -p resumes logs
+          if [ -z "$NAUKRI_SESSION_B64" ]; then
+            echo "ERROR: NAUKRI_SESSION_B64 secret is not configured in repository settings."
+            exit 1
+          fi
+          echo "$NAUKRI_SESSION_B64" | base64 -d > session.json
+          echo "Session file restored."
+
+          if [ -n "$RESUME_B64" ]; then
+            echo "$RESUME_B64" | base64 -d > resumes/resume.pdf
+            echo "Resume file restored from secret."
+          fi
+
+      - name: Run Naukri Updater
+        run: |
+          python update_naukri.py
+
+      - name: Upload Logs as Artifact (Optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-logs
+          path: logs/
+          retention-days: 7
