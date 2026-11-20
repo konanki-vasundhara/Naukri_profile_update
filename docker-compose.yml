@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  naukri-updater:
+    build: .
+    container_name: naukri-auto-updater
+    restart: always
+    environment:
+      - TZ=Asia/Kolkata
+    volumes:
+      # Mount session, resumes, and logs so they persist on host
+      - ./session.json:/app/session.json
+      - ./resumes:/app/resumes
+      - ./logs:/app/logs

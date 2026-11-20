@@ -1,13 +1,16 @@
 """
 Automated profile and resume updater for Naukri.
 Performs:
-1. Re-uploading resume file (resets 'Last updated' timestamp)
-2. Toggling minor character (e.g. trailing period) in Resume Headline and saving.
+1. Pre-flight internet connectivity check
+2. Re-uploading resume file (resets 'Last updated' timestamp)
+3. Toggling minor character (trailing period) in Resume Headline and saving
+4. Automatic retry loop (up to 3 attempts) on network/timing issues
 """
 
 import os
 import sys
 import time
+import socket
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +26,6 @@ logger = logging.getLogger("NaukriUpdater")
 logger.setLevel(logging.INFO)
 logger.propagate = False
 
-# Avoid duplicate handlers if imported or re-run
 if not logger.handlers:
     fh = logging.FileHandler(config.LOG_FILE)
     fh.setLevel(logging.INFO)
@@ -37,12 +39,29 @@ if not logger.handlers:
     logger.addHandler(sh)
 
 
+def check_internet_connection(max_wait_seconds=60) -> bool:
+    """Waits for active internet connection (crucial when waking from system sleep)."""
+    logger.info("Checking internet connection...")
+    start_time = time.time()
+    while time.time() - start_time < max_wait_seconds:
+        try:
+            # Check connection to reliable DNS
+            socket.create_connection(("8.8.8.8", 53), timeout=3)
+            logger.info("Internet connection verified.")
+            return True
+        except OSError:
+            logger.warning("No internet connection yet. Waiting 5 seconds for network...")
+            time.sleep(5)
+
+    logger.error("Network unavailable after waiting. Cannot proceed with update.")
+    return False
+
+
 def find_resume_file() -> Path | None:
     """Finds the resume file either from config or from resumes/ directory."""
     if config.RESUME_PATH.exists():
         return config.RESUME_PATH
 
-    # Look for any .pdf or .docx in config.RESUME_DIR
     if config.RESUME_DIR.exists():
         files = list(config.RESUME_DIR.glob("*.pdf")) + list(config.RESUME_DIR.glob("*.docx"))
         if files:
@@ -63,10 +82,10 @@ def update_resume_upload(page) -> bool:
         file_input = page.locator("input#attachCV, input[type='file']")
         if file_input.count() > 0:
             file_input.first.set_input_files(str(resume_file))
-            logger.info("Resume file attached to file input. Waiting for upload to complete...")
+            logger.info("Resume file attached. Waiting for upload to process...")
             page.wait_for_timeout(5000)
 
-            # Check for success message or update timestamp
+            # Check status box or toast
             msg_box = page.locator("#attachCVMsgBox, .msg-box, [class*='success'], [class*='updateOn']")
             msg_text = msg_box.first.text_content().strip() if msg_box.count() > 0 else ""
             if msg_text:
@@ -133,16 +152,8 @@ def update_resume_headline(page) -> bool:
         return False
 
 
-def run_update():
-    logger.info("==========================================")
-    logger.info("Starting Naukri Daily Profile Update Task")
-    logger.info("==========================================")
-
-    if not config.SESSION_FILE.exists():
-        logger.error(f"Session file not found: {config.SESSION_FILE}")
-        logger.error("Please run 'python auth_login.py' first to log in and save your session.")
-        sys.exit(1)
-
+def execute_single_attempt() -> bool:
+    """Performs one update attempt and returns True if successful."""
     stealth = Stealth()
     with stealth.use_sync(sync_playwright()) as p:
         browser = p.chromium.launch(
@@ -164,21 +175,21 @@ def run_update():
         try:
             logger.info(f"Navigating to Naukri profile: {config.NAUKRI_PROFILE_URL}")
             page.goto(config.NAUKRI_PROFILE_URL, wait_until="domcontentloaded", timeout=config.BROWSER_TIMEOUT_MS)
+            page.wait_for_timeout(2000)
 
             # Check if redirected to login page or access denied
-            page.wait_for_timeout(2000)
             if "login" in page.url.lower():
                 logger.error("Session has expired! Naukri redirected to the login page.")
                 logger.error("Please re-run 'python auth_login.py' to generate a fresh session.")
-                sys.exit(1)
+                return False
 
             if "Access Denied" in page.title():
-                logger.error("Access Denied by bot detection. Please check credentials or retry.")
-                sys.exit(1)
+                logger.error("Access Denied by bot detection.")
+                return False
 
-            # Wait for profile page elements to render
+            # Wait for profile cards to render
             logger.info("Waiting for profile cards to render...")
-            page.wait_for_selector("#resumeHeadline", timeout=25000)
+            page.wait_for_selector("#resumeHeadline", timeout=30000)
             page.wait_for_timeout(2000)
             logger.info("Profile page successfully loaded.")
 
@@ -193,20 +204,54 @@ def run_update():
 
             if resume_ok and headline_ok:
                 logger.info("★ SUCCESS: Both Resume upload and Headline update completed successfully!")
-            elif resume_ok:
-                logger.info("Resume upload succeeded, but Headline update encountered an issue.")
-            elif headline_ok:
-                logger.info("Headline update succeeded, but Resume upload encountered an issue.")
+                return True
+            elif resume_ok or headline_ok:
+                logger.info("Partial update succeeded.")
+                return True
             else:
-                logger.warning("Neither resume upload nor headline touch succeeded.")
+                logger.warning("Neither action succeeded.")
+                return False
 
-        except PlaywrightTimeoutError:
-            logger.error("Page operation timed out while loading or interacting with Naukri.")
         except Exception as e:
-            logger.error(f"Unexpected error during update: {e}", exc_info=True)
+            logger.error(f"Attempt encountered error: {e}")
+            try:
+                err_screenshot = config.LOG_DIR / "error_latest.png"
+                page.screenshot(path=str(err_screenshot))
+                logger.info(f"Saved diagnostic screenshot to {err_screenshot}")
+            except Exception:
+                pass
+            return False
         finally:
             browser.close()
-            logger.info("Naukri update task finished.\n")
+
+
+def run_update():
+    logger.info("==========================================")
+    logger.info("Starting Naukri Daily Profile Update Task")
+    logger.info("==========================================")
+
+    if not config.SESSION_FILE.exists():
+        logger.error(f"Session file not found: {config.SESSION_FILE}")
+        logger.error("Please run 'python auth_login.py' first to log in and save your session.")
+        sys.exit(1)
+
+    if not check_internet_connection(max_wait_seconds=60):
+        logger.error("Exiting due to no network connectivity.")
+        sys.exit(1)
+
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        logger.info(f"--- Attempt {attempt} of {max_attempts} ---")
+        if execute_single_attempt():
+            logger.info("Update completed successfully.\n")
+            return
+        if attempt < max_attempts:
+            wait_sec = 15 * attempt
+            logger.warning(f"Attempt {attempt} failed. Retrying in {wait_sec} seconds...")
+            time.sleep(wait_sec)
+
+    logger.error("All update attempts failed.\n")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
