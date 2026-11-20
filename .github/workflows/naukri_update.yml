@@ -28,29 +28,29 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium --with-deps
 
-      - name: Restore Session & Resume from Secrets
+      - name: Restore Session & Resume
         env:
           NAUKRI_SESSION_B64: ${{ secrets.NAUKRI_SESSION_B64 }}
-          RESUME_B64: ${{ secrets.RESUME_B64 }}
+          RESUME_PASSWORD: ${{ secrets.RESUME_PASSWORD }}
         run: |
           mkdir -p resumes logs
           if [ -z "$NAUKRI_SESSION_B64" ]; then
-            echo "ERROR: NAUKRI_SESSION_B64 secret is not configured in repository settings."
+            echo "ERROR: NAUKRI_SESSION_B64 secret is not configured."
             exit 1
           fi
           echo "$NAUKRI_SESSION_B64" | base64 -d > session.json
-          echo "Session file restored."
+          echo "✓ Session file restored."
 
-          if [ -n "$RESUME_B64" ]; then
-            echo "$RESUME_B64" | base64 -d > resumes/resume.pdf
-            echo "Resume file restored from secret."
+          if [ -f "resumes/resume.enc" ] && [ -n "$RESUME_PASSWORD" ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -in resumes/resume.enc -out resumes/resume.pdf -pass pass:"$RESUME_PASSWORD"
+            echo "✓ Resume decrypted and restored."
           fi
 
       - name: Run Naukri Updater
         run: |
           python update_naukri.py
 
-      - name: Upload Logs as Artifact (Optional)
+      - name: Upload Logs as Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
