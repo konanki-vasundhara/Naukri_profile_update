@@ -21,13 +21,13 @@ WorkingDirectory=$SCRIPT_DIR
 ExecStart=/bin/bash $SCRIPT_DIR/run.sh
 EOF
 
-# 2. Create timer file (runs at 08:00 and 17:00, with Persistent=true to catch up if asleep)
+# 2. Create timer file (runs at 09:00 and 17:00, with Persistent=true to catch up if asleep)
 cat <<EOF > "$SYSTEMD_USER_DIR/naukri-updater.timer"
 [Unit]
 Description=Timer for Naukri Profile & Resume Auto-Updater
 
 [Timer]
-OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 09:00:00
 OnCalendar=*-*-* 17:00:00
 Persistent=true
 

@@ -22,14 +22,14 @@ def job():
     except Exception as e:
         logger.error(f"Error executing scheduled job: {e}")
 
-# Schedule for 08:00 AM and 05:00 PM (17:00)
-schedule.every().day.at("08:00").do(job)
+# Schedule for 09:00 AM and 05:00 PM (17:00)
+schedule.every().day.at("09:00").do(job)
 schedule.every().day.at("17:00").do(job)
 
 if __name__ == "__main__":
     logger.info("==================================================")
     logger.info("Naukri Auto-Updater Scheduler started.")
-    logger.info("Scheduled times: 08:00 AM and 05:00 PM (17:00) daily.")
+    logger.info("Scheduled times: 09:00 AM and 05:00 PM (17:00) daily.")
     logger.info("Current system time: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     logger.info("==================================================")
 
