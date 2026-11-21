@@ -2,11 +2,11 @@ name: Naukri Daily Auto-Updater
 
 on:
   schedule:
-    # 8:00 AM IST (Indian Standard Time is UTC + 5:30) -> 02:30 UTC
-    - cron: '30 2 * * *'
+    # 9:00 AM IST (Indian Standard Time is UTC + 5:30) -> 03:30 UTC
+    - cron: '30 3 * * *'
     # 5:00 PM IST (17:00 IST) -> 11:30 UTC
     - cron: '30 11 * * *'
-  # Allows you to manually trigger the workflow from GitHub Actions UI anytime
+  # Allows manual triggers anytime from GitHub web UI or API
   workflow_dispatch:
 
 jobs:
