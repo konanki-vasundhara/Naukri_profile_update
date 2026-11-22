@@ -134,6 +134,13 @@ def update_resume_headline(page) -> bool:
             else:
                 new_text = current_text + "."
 
+            # Respect the field's max length; exceeding it makes Naukri truncate the headline
+            max_len = textarea.first.get_attribute("maxlength")
+            if max_len and max_len.isdigit() and len(new_text) > int(max_len):
+                logger.warning(f"Headline already at max length ({max_len}); skipping toggle to avoid truncation. Resume upload still refreshes the profile.")
+                page.keyboard.press("Escape")
+                return True
+
             logger.info(f"Updating Headline to: '{new_text}'")
             textarea.first.fill(new_text)
             page.wait_for_timeout(800)

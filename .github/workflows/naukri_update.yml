@@ -2,16 +2,25 @@ name: Naukri Daily Auto-Updater
 
 on:
   schedule:
-    # 9:00 AM IST (Indian Standard Time is UTC + 5:30) -> 03:30 UTC
-    - cron: '30 3 * * *'
-    # 5:00 PM IST (17:00 IST) -> 11:30 UTC
-    - cron: '30 11 * * *'
+    # GitHub drops/delays crons at busy minutes (:00/:30), so use odd minutes
+    # and add a backup run for each slot. Re-running is harmless (idempotent).
+    # 9:00 AM IST = 03:30 UTC  -> primary 03:17, backup 04:43 UTC
+    - cron: '17 3 * * *'
+    - cron: '43 4 * * *'
+    # 5:00 PM IST = 11:30 UTC  -> primary 11:17, backup 12:43 UTC
+    - cron: '17 11 * * *'
+    - cron: '43 12 * * *'
   # Allows manual triggers anytime from GitHub web UI or API
   workflow_dispatch:
+
+concurrency:
+  group: naukri-update
+  cancel-in-progress: false
 
 jobs:
   update-profile:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
